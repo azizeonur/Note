@@ -26,23 +26,45 @@ class NoteRepositoryImpl @Inject constructor(
                 close(error)
                 return@addSnapshotListener
             }
+
             val notes = snapshot?.documents?.mapNotNull {
                 val dto = it.toObject(NoteDto::class.java)
                 dto?.copy(id = it.id)
             }?.map { NoteMapper.fromDto(it) } ?: emptyList()
+
             trySend(notes)
         }
         awaitClose { subscription.remove() }
     }
 
     override suspend fun addNote(note: Note) {
-        val dto = NoteMapper.toDto(note)
-        notesCollection.add(dto).await()
+        val docRef =
+            if (note.id.isBlank()) notesCollection.document()
+            else notesCollection.document(note.id)
+
+        // --- RESİM YÜKLEME KESİN ÇALIŞACAK ---
+        val uploadedUrl = uploadImageIfNeeded(note.imageUrl)
+
+        val finalNote = note.copy(
+            id = docRef.id,
+            imageUrl = uploadedUrl
+        )
+
+        docRef.set(NoteMapper.toDto(finalNote)).await()
     }
 
     override suspend fun updateNote(note: Note) {
-        val dto = NoteMapper.toDto(note)
-        notesCollection.document(note.id).set(dto).await()
+
+        // --- RESİM YÜKLEME KESİN ÇALIŞACAK ---
+        val uploadedUrl = uploadImageIfNeeded(note.imageUrl)
+
+        val finalNote = note.copy(
+            imageUrl = uploadedUrl
+        )
+
+        notesCollection.document(note.id)
+            .set(NoteMapper.toDto(finalNote))
+            .await()
     }
 
     override suspend fun deleteNote(id: String) {
@@ -50,8 +72,22 @@ class NoteRepositoryImpl @Inject constructor(
     }
 
     override suspend fun uploadImage(uri: Uri): String {
-        val ref = storage.reference.child("notes/${UUID.randomUUID()}")
+        val ref = storage.reference.child("notes/${UUID.randomUUID()}.jpg")
         ref.putFile(uri).await()
         return ref.downloadUrl.await().toString()
+    }
+
+    /**
+     * Eğer imageUrl "content://" ise yeni upload eder,
+     * değilse (zaten yüklenmiş URL ise) aynen döner.
+     */
+    private suspend fun uploadImageIfNeeded(imageUrl: String?): String? {
+        if (imageUrl.isNullOrBlank()) return null
+
+        return if (imageUrl.startsWith("content://")) {
+            uploadImage(Uri.parse(imageUrl))
+        } else {
+            imageUrl // mevcut URL
+        }
     }
 }

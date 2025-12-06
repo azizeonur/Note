@@ -5,89 +5,123 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.notebook.domain.model.AddNoteUseCase
+import com.example.notebook.domain.model.DeleteNoteUseCase
 import com.example.notebook.domain.model.Note
 import com.example.notebook.domain.model.UpdateNoteUseCase
 import com.example.notebook.domain.model.UploadImageUseCase
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
-
 
 
 @HiltViewModel
 class AddEditNoteViewModel @Inject constructor(
     private val addNoteUseCase: AddNoteUseCase,
     private val updateNoteUseCase: UpdateNoteUseCase,
-    private val uploadImageUseCase: UploadImageUseCase
+    private val deleteNoteUseCase: DeleteNoteUseCase
 ) : ViewModel() {
 
-    // Compose ile bağlayacağımız state'ler
     var title = mutableStateOf("")
         private set
     var description = mutableStateOf("")
         private set
-    var imageUri = mutableStateOf<Uri?>(null)
-        private set
+
+    private var currentNote: Note? = null
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val _notes = MutableStateFlow<List<Note>>(emptyList())
-    val notes: StateFlow<List<Note>> = _notes
+    fun onTitleChange(v: String) { title.value = v }
+    fun onDescriptionChange(v: String) { description.value = v }
 
-    // TextField güncelleme fonksiyonları
-    fun onTitleChange(newTitle: String) { title.value = newTitle }
-    fun onDescriptionChange(newDescription: String) { description.value = newDescription }
-    fun onImageUriChange(newUri: Uri?) { imageUri.value = newUri }
+    /**
+     * Edit modunda Firestore’dan note çekiyoruz.
+     */
+    fun loadNoteById(noteId: String?) {
+        if (noteId.isNullOrEmpty()) return
 
-    // Not ekleme
-    fun addNote() {
         viewModelScope.launch {
             _isLoading.value = true
-            val imageUrl = imageUri.value?.let { uploadImageUseCase(it) }
+            try {
+                val snapshot = FirebaseFirestore.getInstance()
+                    .collection("notes")
+                    .document(noteId)
+                    .get()
+                    .await()
+
+                val note = snapshot.toObject(Note::class.java)
+                if (note != null) {
+                    currentNote = note
+                    title.value = note.title
+                    description.value = note.description
+                }
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Yeni not ekleme
+     */
+    fun addNote() {
+        viewModelScope.launch {
             val note = Note(
+                id = "",
                 title = title.value,
                 description = description.value,
-                imageUrl = imageUrl,
-                createdAt = System.currentTimeMillis(),
+                createdAt = Timestamp.now(),
                 edited = false
             )
             addNoteUseCase(note)
-            _isLoading.value = false
         }
     }
 
-    // Not güncelleme
-    fun updateNote(note: Note) {
+    /**
+     * Var olan notu güncelleme
+     */
+    fun updateNote() {
+        val original = currentNote ?: return
+
         viewModelScope.launch {
-            _isLoading.value = true
-            val imageUrl = imageUri.value?.let { uploadImageUseCase(it) } ?: note.imageUrl
-            val updatedNote = note.copy(
+            val updated = original.copy(
                 title = title.value,
                 description = description.value,
-                imageUrl = imageUrl,
                 edited = true
             )
-            updateNoteUseCase(updatedNote)
-            _isLoading.value = false
+            updateNoteUseCase(updated)
         }
     }
 
-    // noteId ile note'u yükle ve state'leri doldur
-    fun loadNoteById(noteId: String?) {
-        if (noteId.isNullOrEmpty()) return
-        val note = getNoteById(noteId)
-        note?.let {
-            title.value = it.title
-            description.value = it.description
-            imageUri.value = it.imageUrl?.let { uriStr -> Uri.parse(uriStr) }
-        }
-    }
+    fun saveNote() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val isTitleEmpty = title.value.isBlank()
+                val isDescEmpty = description.value.isBlank()
 
-    // mevcut notu listeden bul
-    fun getNoteById(id: String): Note? {
-        return _notes.value.find { it.id == id }
+                val note = currentNote
+
+                if (note != null && isTitleEmpty && isDescEmpty) {
+                    deleteNoteUseCase(note.id)
+                    return@launch
+                }
+
+                if (note == null) {
+                    addNote()
+                    return@launch
+                }
+
+                updateNote()
+
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 }

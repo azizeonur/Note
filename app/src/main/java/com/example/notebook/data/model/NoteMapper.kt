@@ -1,6 +1,7 @@
 package com.example.notebook.data.model
 
 import com.example.notebook.domain.model.Note
+import com.google.firebase.Timestamp
 
 object NoteMapper {
 
@@ -10,7 +11,7 @@ object NoteMapper {
             title = dto.title,
             description = dto.description,
             imageUrl = dto.imageUrl,
-            createdAt = dto.createdAt?.time ?: 0L,
+            createdAt = Timestamp.now(),
             edited = dto.edited
         )
     }
