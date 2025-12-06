@@ -39,9 +39,6 @@ class AddEditNoteViewModel @Inject constructor(
     fun onTitleChange(v: String) { title.value = v }
     fun onDescriptionChange(v: String) { description.value = v }
 
-    /**
-     * Edit modunda Firestore’dan note çekiyoruz.
-     */
     fun loadNoteById(noteId: String?) {
         if (noteId.isNullOrEmpty()) return
 
@@ -66,9 +63,7 @@ class AddEditNoteViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Yeni not ekleme
-     */
+
     fun addNote() {
         viewModelScope.launch {
             val note = Note(
@@ -82,9 +77,6 @@ class AddEditNoteViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Var olan notu güncelleme
-     */
     fun updateNote() {
         val original = currentNote ?: return
 

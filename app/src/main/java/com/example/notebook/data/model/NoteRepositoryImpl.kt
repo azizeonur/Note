@@ -42,7 +42,7 @@ class NoteRepositoryImpl @Inject constructor(
             if (note.id.isBlank()) notesCollection.document()
             else notesCollection.document(note.id)
 
-        // --- RESİM YÜKLEME KESİN ÇALIŞACAK ---
+
         val uploadedUrl = uploadImageIfNeeded(note.imageUrl)
 
         val finalNote = note.copy(
@@ -55,7 +55,7 @@ class NoteRepositoryImpl @Inject constructor(
 
     override suspend fun updateNote(note: Note) {
 
-        // --- RESİM YÜKLEME KESİN ÇALIŞACAK ---
+
         val uploadedUrl = uploadImageIfNeeded(note.imageUrl)
 
         val finalNote = note.copy(
@@ -77,17 +77,13 @@ class NoteRepositoryImpl @Inject constructor(
         return ref.downloadUrl.await().toString()
     }
 
-    /**
-     * Eğer imageUrl "content://" ise yeni upload eder,
-     * değilse (zaten yüklenmiş URL ise) aynen döner.
-     */
     private suspend fun uploadImageIfNeeded(imageUrl: String?): String? {
         if (imageUrl.isNullOrBlank()) return null
 
         return if (imageUrl.startsWith("content://")) {
             uploadImage(Uri.parse(imageUrl))
         } else {
-            imageUrl // mevcut URL
+            imageUrl
         }
     }
 }

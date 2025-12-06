@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
 
                 NavHost(navController = navController, startDestination = "notes_list") {
 
-                    // Notes List Screen
+
                     composable("notes_list") {
                         NotesListScreen(
                             viewModel = hiltViewModel(),
@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Add/Edit Note Screen
+
                     composable(
                         route = "add_edit_note?noteId={noteId}",
                         arguments = listOf(
